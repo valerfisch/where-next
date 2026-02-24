@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Data (too large for git)
+dataset/
+prepared_dataset/
+
+# IDE
+.vscode/
+.idea/
+.claude/
+
+# Papers
+paper/
+
+# OS
+.DS_Store
+
+# Todo
+TODO.md
+
