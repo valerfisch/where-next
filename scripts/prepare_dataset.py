@@ -61,16 +61,18 @@ def extract_frames_ffmpeg(video_path: Path, output_dir: Path, frames: set[int], 
         cmd.extend(['-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda'])
     cmd.extend([
         '-i', str(video_path),
-        '-vf', f"select='{select_expr}',setpts=N/TB" + (",hwdownload,format=nv12" if use_gpu else ""),
-        '-vsync', 'vfr', '-frame_pts', '1',
+        '-vf', f"select='{select_expr}'" + (",hwdownload,format=nv12" if use_gpu else ""),
+        '-vsync', 'vfr',
         str(output_dir / '%06d.jpg')
     ])
     subprocess.run(cmd, check=True, capture_output=True)
 
+    # FFmpeg outputs 1-indexed sequential files (000001.jpg, 000002.jpg, ...)
+    # Rename to match manifest frame indices
     for i, src_frame in enumerate(source_frames):
-        old = output_dir / f'{i+1:06d}.jpg'
+        old = output_dir / f'{i + 1:06d}.jpg'
         new = output_dir / f'{src_frame // FRAME_SKIP:06d}.jpg'
-        if old.exists():
+        if old.exists() and old != new:
             old.rename(new)
 
 
@@ -83,12 +85,33 @@ def process_video(args: tuple) -> dict:
         if not tracks:
             return {'name': name, 'status': 'skip'}
 
-        # Save per-video manifest
-        manifest = {'video': name, 'tracks': tracks}
+        # Build per-frame bounding box lookup
+        frame_bbs = defaultdict(list)
+        max_frame_per_track = {}
+        for t in tracks:
+            tid = t['id']
+            frames_in_track = [pt[4] for pt in t['bb']]
+            max_frame_per_track[tid] = max(frames_in_track)
+            for x, y, w, h, fid in t['bb']:
+                frame_bbs[fid].append({
+                    'agent_id': tid, 'x': x, 'y': y, 'width': w, 'height': h
+                })
+
+        # Save per-frame manifests
         manifest_dir = output_dir / 'manifests'
         manifest_dir.mkdir(parents=True, exist_ok=True)
-        with open(manifest_dir / f'{name}.json', 'w') as f:
-            json.dump(manifest, f)
+        for fid, bbs in frame_bbs.items():
+            has_future = any(
+                max_frame_per_track[bb['agent_id']] > fid for bb in bbs
+            )
+            manifest = {
+                'video_id': name,
+                'frame': fid,
+                'has_future': has_future,
+                'bbs': bbs,
+            }
+            with open(manifest_dir / f'{name}_{fid:06d}.json', 'w') as f:
+                json.dump(manifest, f)
 
         # Extract frames
         if do_extract:

@@ -47,12 +47,14 @@ Each bbox JSON contains an array of detections:
 
 ### Prepared dataset
 
-After running `prepare_dataset.py`, per-video manifests are saved:
+After running `prepare_dataset.py`, per-frame manifests are saved:
 ```json
 {
-  "video": "0000_0_303_0_1_cam1",
-  "tracks": [
-    {"id": 303, "bb": [[x, y, w, h, frame], ...]}
+  "video_id": "0000_0_303_0_1_cam1",
+  "frame": 12,
+  "has_future": true,
+  "bbs": [
+    {"agent_id": 303, "x": 960, "y": 540, "width": 50, "height": 120}
   ]
 }
 ```
@@ -78,24 +80,26 @@ python scripts/prepare_dataset.py --input_dir ./dataset/next_x_v1_dataset --outp
 python scripts/prepare_dataset.py --limit 10
 ```
 
-### 2. Train CenterNet
+### 2. Visualize dataset
 
 ```bash
-python src/train.py  # coming soon
+cd src && python main.py
 ```
+Saves `visualization.png` showing input image, segmentation GT, and heatmap GT side by side.
 
 ## Project structure
 
 ```
 ├── scripts/
-│   └── prepare_dataset.py      # Frame extraction + per-video manifest generation
+│   └── prepare_dataset.py      # Frame extraction + per-frame manifest generation
 ├── src/
 │   ├── data/
-│   │   └── centernet_dataset.py # CenterNet PyTorch dataset (WIP)
-│   └── main.py                 # Entry point (placeholder)
+│   │   └── centernet_dataset.py # CenterNet PyTorch dataset (heatmap + segmentation GT)
+│   ├── visualize.py             # Visualization of dataset samples
+│   └── main.py                  # Entry point — loads dataset and visualizes
 ├── paper/
-│   └── 1904.07850v2.pdf        # CenterNet paper
-├── TODO.md                     # Detailed implementation roadmap
+│   └── 1904.07850v2.pdf         # CenterNet paper
+├── TODO.md                      # Detailed implementation roadmap
 └── README.md
 ```
 
