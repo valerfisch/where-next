@@ -15,6 +15,9 @@ prepared_dataset/
 # Papers
 paper/
 
+# TensorBoard
+src/runs/
+
 # OS
 .DS_Store
 

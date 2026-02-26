@@ -1,4 +1,5 @@
 import json
+import math
 import cv2
 import torch
 
@@ -33,6 +34,9 @@ class CenterNetSample:
     img: torch.Tensor
     gt_seg: torch.Tensor
     gt_heat: torch.Tensor
+    gt_offset: torch.Tensor
+    gt_size: torch.Tensor
+    reg_mask: torch.Tensor
 
 
 def parse_json(json_file):
@@ -92,9 +96,14 @@ class CenterNetDataset(Dataset):
         image = self.image_transform(img_rgb)
 
         h, w = image.shape[1], image.shape[2]
+        stride = 4
+        out_h, out_w = h // stride, w // stride
 
         gt_seg = torch.zeros(h, w)
-        gt_heat = torch.zeros(h, w)
+        gt_heat = torch.zeros(out_h, out_w)
+        gt_offset = torch.zeros(2, out_h, out_w)
+        gt_size = torch.zeros(2, out_h, out_w)
+        reg_mask = torch.zeros(2, out_h, out_w)
 
         for bb in d.bbs:
             left = max(0, int(bb.x - 0.5 * bb.width))
@@ -104,9 +113,29 @@ class CenterNetDataset(Dataset):
 
             gt_seg[top:bottom, left:right] = bb.agent_id
 
-            self._splat_gaussian(gt_heat, int(bb.x), int(bb.y), bb.width, bb.height)
+            cx_s = bb.x / stride
+            cy_s = bb.y / stride
+            bw_s = bb.width / stride
+            bh_s = bb.height / stride
 
-        return CenterNetSample(gt_seg=gt_seg, gt_heat=gt_heat, img=image)
+            self._splat_gaussian(gt_heat, int(cx_s), int(cy_s), bw_s, bh_s)
+
+            cx_int, cy_int = int(cx_s), int(cy_s)
+            if 0 <= cx_int < out_w and 0 <= cy_int < out_h:
+                gt_offset[0, cy_int, cx_int] = cx_s - cx_int
+                gt_offset[1, cy_int, cx_int] = cy_s - cy_int
+                gt_size[0, cy_int, cx_int] = math.log(bw_s + 1e-6)
+                gt_size[1, cy_int, cx_int] = math.log(bh_s + 1e-6)
+                reg_mask[:, cy_int, cx_int] = 1
+
+        return {
+            "img": image,
+            "gt_seg": gt_seg,
+            "gt_heat": gt_heat,
+            "gt_offset": gt_offset,
+            "gt_size": gt_size,
+            "reg_mask": reg_mask,
+        }
 
     def _gaussian_radius(self, bh, bw, iou=0.3):
         candidates = []
