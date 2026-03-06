@@ -38,6 +38,10 @@ def centernet_loss(pred, gt, offset_weight=1.0, size_weight=1.0):
     # - Near GT centers: Gaussian tail provides baseline weight
     # - pred_heatmap adds weight where network is confident
     soft_weight = torch.max(heatmap.detach(), gt_heatmap)
+    # Softmax over spatial dims so regression focuses on peaks
+    flat = soft_weight.view(soft_weight.shape[0], -1)
+    flat = torch.softmax(flat, dim=-1)
+    soft_weight = flat.view_as(soft_weight)
     soft_mask = soft_weight.unsqueeze(1).expand_as(reg_mask) * reg_mask
 
     l_heatmap = focal_loss(heatmap, gt_heatmap)
